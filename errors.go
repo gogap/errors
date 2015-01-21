@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
@@ -51,10 +52,6 @@ func Errorf(format string, a ...interface{}) error {
 }
 
 func T(code uint64, template string) errCodeTemplate {
-	if code < 10000 {
-		panic("error code should greater than 10000")
-	}
-
 	if _, exist := errCodeDefined[code]; exist {
 		strErr := fmt.Sprintf("error code %d already exist", code)
 		panic(strErr)
@@ -67,6 +64,9 @@ func T(code uint64, template string) errCodeTemplate {
 type ErrCode interface {
 	Code() uint64
 	Error() string
+	StackTrace() string
+	Context() string
+	FullError() error
 }
 
 type errCodeTemplate struct {
@@ -92,18 +92,19 @@ func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
 	}
 
 	strCode := fmt.Sprintf("ERRCODE:%d", tpl.code)
+	st, ctx := StackTrace()
 	if t, e := template.New(strCode).Parse(tpl.template); e != nil {
 		strErr := fmt.Sprintf("parser error template failed, code: %d, error: %s", tpl.code, e)
-		err = &errorCode{code: ERRCODE_PARSE_TPL_ERROR, message: strErr}
+		err = &errorCode{code: ERRCODE_PARSE_TPL_ERROR, message: strErr, stackTrace: st, context: ctx}
 		return
 	} else {
 		var buf bytes.Buffer
 		if e := t.Execute(&buf, params); e != nil {
 			strErr := fmt.Sprintf("execute template failed, code: %d, error: %s", tpl.code, e)
-			return &errorCode{code: ERRCODE_EXEC_TPL_ERROR, message: strErr}
+			return &errorCode{code: ERRCODE_EXEC_TPL_ERROR, message: strErr, stackTrace: st, context: ctx}
 		} else {
 			bufstr := strings.Replace(buf.String(), no_VALUE, "[NO_VALUE]", -1)
-			return &errorCode{code: tpl.code, message: bufstr}
+			return &errorCode{code: tpl.code, message: bufstr, stackTrace: st, context: ctx}
 		}
 	}
 }
@@ -118,8 +119,10 @@ func (p *errCodeTemplate) IsEqual(err error) bool {
 }
 
 type errorCode struct {
-	code    uint64
-	message string
+	code       uint64
+	message    string
+	stackTrace string
+	context    string
 }
 
 func (p *errorCode) Code() uint64 {
@@ -127,7 +130,25 @@ func (p *errorCode) Code() uint64 {
 }
 
 func (p *errorCode) Error() string {
-	return p.message
+	return fmt.Sprintf("[ERR-%d]: %s", p.code, p.message)
+}
+
+func (p *errorCode) FullError() error {
+	errLines := make([]string, 1)
+	errLines[0] = fmt.Sprintf("CODE: %d", p.code)
+	errLines = append(errLines, p.message)
+	errLines = append(errLines, "")
+	errLines = append(errLines, "ORIGINAL STACK TRACE:")
+	errLines = append(errLines, p.stackTrace)
+	return New(strings.Join(errLines, "\n"))
+}
+
+func (p *errorCode) Context() string {
+	return p.context
+}
+
+func (p *errorCode) StackTrace() string {
+	return p.stackTrace
 }
 
 func LoadMessageTemplate(fileName string) error {
@@ -176,4 +197,58 @@ func LoadMessageTemplate(fileName string) error {
 func IsErrCode(err error) bool {
 	_, ok := err.(ErrCode)
 	return ok
+}
+
+func StackTrace() (current, context string) {
+	return stackTrace(3)
+}
+
+func stackTrace(skip int) (current, context string) {
+	buf := make([]byte, 128)
+	for {
+		n := runtime.Stack(buf, false)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, len(buf)*2)
+	}
+
+	indexNewline := func(b []byte, start int) int {
+		if start >= len(b) {
+			return len(b)
+		}
+		searchBuf := b[start:]
+		index := bytes.IndexByte(searchBuf, '\n')
+		if index == -1 {
+			return len(b)
+		} else {
+			return (start + index)
+		}
+	}
+
+	var strippedBuf bytes.Buffer
+	index := indexNewline(buf, 0)
+	if index != -1 {
+		strippedBuf.Write(buf[:index])
+	}
+
+	for i := 0; i < skip; i++ {
+		index = indexNewline(buf, index+1)
+		index = indexNewline(buf, index+1)
+	}
+
+	isDone := false
+	startIndex := index
+	lastIndex := index
+	for !isDone {
+		index = indexNewline(buf, index+1)
+		if (index - lastIndex) <= 1 {
+			isDone = true
+		} else {
+			lastIndex = index
+		}
+	}
+	strippedBuf.Write(buf[startIndex:index])
+	return strippedBuf.String(), string(buf[index:])
 }

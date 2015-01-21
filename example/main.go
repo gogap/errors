@@ -21,6 +21,9 @@ func main() {
 	equal1 := ERR_PARSE_TEST.IsEqual(err1)
 	fmt.Println(err1)
 	fmt.Println(equal1)
+	fmt.Println(err1.StackTrace())
+	fmt.Println(err1.Context())
+	fmt.Println(err1.FullError())
 
 	err2 := ERR_PARSE_TEST2.New(errors.Params{"param1": "example"})
 	equal2 := ERR_PARSE_TEST2.IsEqual(err2)
