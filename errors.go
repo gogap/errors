@@ -2,12 +2,14 @@ package errors
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
+
+	"github.com/facebookgo/stack"
 )
 
 const (
@@ -61,11 +63,20 @@ func T(code uint64, template string) errCodeTemplate {
 	return errCodeTemplate{code: code, template: template}
 }
 
+type ErrorContext map[string]interface{}
+
+func (p ErrorContext) String() string {
+	if bJson, e := json.Marshal(p); e == nil {
+		return string(bJson)
+	}
+	return ""
+}
+
 type ErrCode interface {
 	Code() uint64
 	Error() string
 	StackTrace() string
-	Context() string
+	Context() ErrorContext
 	FullError() error
 }
 
@@ -92,19 +103,21 @@ func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
 	}
 
 	strCode := fmt.Sprintf("ERRCODE:%d", tpl.code)
-	st, ctx := StackTrace()
+
+	stack := stack.CallersMulti(1)
+
 	if t, e := template.New(strCode).Parse(tpl.template); e != nil {
 		strErr := fmt.Sprintf("parser error template failed, code: %d, error: %s", tpl.code, e)
-		err = &errorCode{code: ERRCODE_PARSE_TPL_ERROR, message: strErr, stackTrace: st, context: ctx}
+		err = &errorCode{code: ERRCODE_PARSE_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
 		return
 	} else {
 		var buf bytes.Buffer
 		if e := t.Execute(&buf, params); e != nil {
 			strErr := fmt.Sprintf("execute template failed, code: %d, error: %s", tpl.code, e)
-			return &errorCode{code: ERRCODE_EXEC_TPL_ERROR, message: strErr, stackTrace: st, context: ctx}
+			return &errorCode{code: ERRCODE_EXEC_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
 		} else {
 			bufstr := strings.Replace(buf.String(), no_VALUE, "[NO_VALUE]", -1)
-			return &errorCode{code: tpl.code, message: bufstr, stackTrace: st, context: ctx}
+			return &errorCode{code: tpl.code, message: bufstr, stackTrace: stack.String(), context: params}
 		}
 	}
 }
@@ -122,7 +135,7 @@ type errorCode struct {
 	code       uint64
 	message    string
 	stackTrace string
-	context    string
+	context    map[string]interface{}
 }
 
 func (p *errorCode) Code() uint64 {
@@ -143,7 +156,7 @@ func (p *errorCode) FullError() error {
 	return New(strings.Join(errLines, "\n"))
 }
 
-func (p *errorCode) Context() string {
+func (p *errorCode) Context() ErrorContext {
 	return p.context
 }
 
@@ -197,58 +210,4 @@ func LoadMessageTemplate(fileName string) error {
 func IsErrCode(err error) bool {
 	_, ok := err.(ErrCode)
 	return ok
-}
-
-func StackTrace() (current, context string) {
-	return stackTrace(3)
-}
-
-func stackTrace(skip int) (current, context string) {
-	buf := make([]byte, 128)
-	for {
-		n := runtime.Stack(buf, false)
-		if n < len(buf) {
-			buf = buf[:n]
-			break
-		}
-		buf = make([]byte, len(buf)*2)
-	}
-
-	indexNewline := func(b []byte, start int) int {
-		if start >= len(b) {
-			return len(b)
-		}
-		searchBuf := b[start:]
-		index := bytes.IndexByte(searchBuf, '\n')
-		if index == -1 {
-			return len(b)
-		} else {
-			return (start + index)
-		}
-	}
-
-	var strippedBuf bytes.Buffer
-	index := indexNewline(buf, 0)
-	if index != -1 {
-		strippedBuf.Write(buf[:index])
-	}
-
-	for i := 0; i < skip; i++ {
-		index = indexNewline(buf, index+1)
-		index = indexNewline(buf, index+1)
-	}
-
-	isDone := false
-	startIndex := index
-	lastIndex := index
-	for !isDone {
-		index = indexNewline(buf, index+1)
-		if (index - lastIndex) <= 1 {
-			isDone = true
-		} else {
-			lastIndex = index
-		}
-	}
-	strippedBuf.Write(buf[startIndex:index])
-	return strippedBuf.String(), string(buf[index:])
 }
