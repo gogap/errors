@@ -23,10 +23,6 @@ func main() {
 	fmt.Println(err1)
 	fmt.Println(err1, "Equal", ERR_PARSE_TEST, "?:", equal1)
 
-	fmt.Println("==StackTrace======================")
-	fmt.Println(err1.StackTrace())
-	fmt.Println("==Context=========================")
-	fmt.Println(err1.Context())
 	fmt.Println("==FullError=======================")
 	fmt.Println(err1.FullError())
 
@@ -43,7 +39,7 @@ func main() {
 
 	errCode := errStack.(errors.ErrCode)
 
-	fmt.Println(errCode.StackTrace())
+	fmt.Println(errCode.FullError())
 }
 
 func call_1() error {

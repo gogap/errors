@@ -10,6 +10,7 @@ import (
 	"text/template"
 
 	"github.com/facebookgo/stack"
+	uuid "github.com/nu7hatch/gouuid"
 )
 
 const (
@@ -73,6 +74,7 @@ func (p ErrorContext) String() string {
 }
 
 type ErrCode interface {
+	Id() string
 	Code() uint64
 	Error() string
 	StackTrace() string
@@ -106,18 +108,23 @@ func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
 
 	stack := stack.CallersMulti(1)
 
+	errId := "<NO-UUID>"
+	if errUUID, e := uuid.NewV4(); e == nil {
+		errId = errUUID.String()
+	}
+
 	if t, e := template.New(strCode).Parse(tpl.template); e != nil {
 		strErr := fmt.Sprintf("parser error template failed, code: %d, error: %s", tpl.code, e)
-		err = &errorCode{code: ERRCODE_PARSE_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
+		err = &errorCode{id: errId, code: ERRCODE_PARSE_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
 		return
 	} else {
 		var buf bytes.Buffer
 		if e := t.Execute(&buf, params); e != nil {
 			strErr := fmt.Sprintf("execute template failed, code: %d, error: %s", tpl.code, e)
-			return &errorCode{code: ERRCODE_EXEC_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
+			return &errorCode{id: errId, code: ERRCODE_EXEC_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
 		} else {
 			bufstr := strings.Replace(buf.String(), no_VALUE, "[NO_VALUE]", -1)
-			return &errorCode{code: tpl.code, message: bufstr, stackTrace: stack.String(), context: params}
+			return &errorCode{id: errId, code: tpl.code, message: bufstr, stackTrace: stack.String(), context: params}
 		}
 	}
 }
@@ -132,10 +139,15 @@ func (p *errCodeTemplate) IsEqual(err error) bool {
 }
 
 type errorCode struct {
+	id         string
 	code       uint64
 	message    string
 	stackTrace string
 	context    map[string]interface{}
+}
+
+func (p *errorCode) Id() string {
+	return p.id
 }
 
 func (p *errorCode) Code() uint64 {
@@ -148,10 +160,12 @@ func (p *errorCode) Error() string {
 
 func (p *errorCode) FullError() error {
 	errLines := make([]string, 1)
-	errLines[0] = fmt.Sprintf("CODE: %d", p.code)
+	errLines[0] = fmt.Sprintf("ERR_ID: %s\nCODE: %d", p.id, p.code)
+	errLines = append(errLines, "MESSAGE:")
 	errLines = append(errLines, p.message)
-	errLines = append(errLines, "")
-	errLines = append(errLines, "ORIGINAL STACK TRACE:")
+	errLines = append(errLines, "CONTEXT:")
+	errLines = append(errLines, p.Context().String())
+	errLines = append(errLines, "ORIGINAL_STACK_TRACE:")
 	errLines = append(errLines, p.stackTrace)
 	return New(strings.Join(errLines, "\n"))
 }
