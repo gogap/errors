@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -113,18 +114,20 @@ func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
 		errId = errUUID.String()
 	}
 
+	crcErrId := crc32.ChecksumIEEE([]byte(errId))
+
 	if t, e := template.New(strCode).Parse(tpl.template); e != nil {
 		strErr := fmt.Sprintf("parser error template failed, code: %d, error: %s", tpl.code, e)
-		err = &errorCode{id: errId, code: ERRCODE_PARSE_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
+		err = &errorCode{id: errId, id_crc: crcErrId, code: ERRCODE_PARSE_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
 		return
 	} else {
 		var buf bytes.Buffer
 		if e := t.Execute(&buf, params); e != nil {
 			strErr := fmt.Sprintf("execute template failed, code: %d, error: %s", tpl.code, e)
-			return &errorCode{id: errId, code: ERRCODE_EXEC_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
+			return &errorCode{id: errId, id_crc: crcErrId, code: ERRCODE_EXEC_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
 		} else {
 			bufstr := strings.Replace(buf.String(), no_VALUE, "[NO_VALUE]", -1)
-			return &errorCode{id: errId, code: tpl.code, message: bufstr, stackTrace: stack.String(), context: params}
+			return &errorCode{id: errId, id_crc: crcErrId, code: tpl.code, message: bufstr, stackTrace: stack.String(), context: params}
 		}
 	}
 }
@@ -140,6 +143,7 @@ func (p *errCodeTemplate) IsEqual(err error) bool {
 
 type errorCode struct {
 	id         string
+	id_crc     uint32
 	code       uint64
 	message    string
 	stackTrace string
@@ -155,12 +159,12 @@ func (p *errorCode) Code() uint64 {
 }
 
 func (p *errorCode) Error() string {
-	return fmt.Sprintf("[ERR-%d]: %s", p.code, p.message)
+	return fmt.Sprintf("[ERR-%d-%0xd]: %s", p.code, p.id_crc, p.message)
 }
 
 func (p *errorCode) FullError() error {
 	errLines := make([]string, 1)
-	errLines[0] = fmt.Sprintf("ERR_ID: %s\nCODE: %d", p.id, p.code)
+	errLines[0] = fmt.Sprintf("ERR_ID: %s\nCODE: %d-%0xd", p.id, p.code, p.id_crc)
 	errLines = append(errLines, "MESSAGE:")
 	errLines = append(errLines, p.message)
 	errLines = append(errLines, "CONTEXT:")
