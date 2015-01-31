@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/facebookgo/stack"
+	"github.com/gogap/stack"
 	uuid "github.com/nu7hatch/gouuid"
 )
 
@@ -107,7 +107,7 @@ func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
 
 	strCode := fmt.Sprintf("ERRCODE:%d", tpl.code)
 
-	stack := stack.CallersMulti(1)
+	stack := stack.CallersDeepth(1, 5)
 
 	errId := "<NO-UUID>"
 	if errUUID, e := uuid.NewV4(); e == nil {
