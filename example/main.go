@@ -7,9 +7,10 @@ import (
 )
 
 var (
-	ERR_PARSE_TEST  = errors.T(10001, "test error")
-	ERR_PARSE_TEST2 = errors.T(10002, "test {{.param1}} error")
-	ERR_STACK_TEST  = errors.T(10003, "call stack test")
+	ERR_PARSE_TEST     = errors.T(10001, "test error")
+	ERR_PARSE_TEST2    = errors.T(10002, "test {{.param1}} error")
+	ERR_STACK_TEST     = errors.T(10003, "call stack test")
+	ERR_NAMESPACE_TEST = errors.TN("GOOD", 10001, "haha error")
 )
 
 func main() {
@@ -40,6 +41,11 @@ func main() {
 	errCode := errStack.(errors.ErrCode)
 
 	fmt.Println(errCode.FullError())
+
+	namedError := ERR_NAMESPACE_TEST.New()
+	fmt.Println(namedError)
+	equal4 := ERR_PARSE_TEST.IsEqual(namedError)
+	fmt.Println(ERR_PARSE_TEST, "Equal", namedError, "?:", equal4)
 }
 
 func call_1() error {
