@@ -46,6 +46,8 @@ func main() {
 	fmt.Println(namedError)
 	equal4 := ERR_PARSE_TEST.IsEqual(namedError)
 	fmt.Println(ERR_PARSE_TEST, "Equal", namedError, "?:", equal4)
+
+	fmt.Println(namedError.FullError())
 }
 
 func call_1() error {
