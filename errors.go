@@ -33,12 +33,12 @@ var (
 )
 
 var (
-	errorTemplate  map[string]errCodeTemplate
+	errorTemplate  map[string]*errCodeTemplate
 	errCodeDefined map[string]bool
 )
 
 func init() {
-	errorTemplate = make(map[string]errCodeTemplate)
+	errorTemplate = make(map[string]*errCodeTemplate)
 	errCodeDefined = make(map[string]bool)
 }
 
@@ -72,7 +72,7 @@ func TN(namespace string, code uint64, template string) errCodeTemplate {
 	} else {
 		errCodeDefined[key] = true
 	}
-	return errCodeTemplate{code: code, namespace: namespace, template: template}
+	return errCodeTemplate{code: code, namespace: namespace, namespaceAlias: namespace, template: template}
 }
 
 type ErrorContext map[string]interface{}
@@ -95,9 +95,10 @@ type ErrCode interface {
 }
 
 type errCodeTemplate struct {
-	namespace string
-	code      uint64
-	template  string
+	namespace      string
+	namespaceAlias string
+	code           uint64
+	template       string
 }
 
 func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
@@ -114,7 +115,7 @@ func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
 	if UsingLoadedTemplate {
 		key := fmt.Sprintf("%s:%d", p.namespace, p.code)
 		if t, exist := errorTemplate[key]; exist {
-			tpl = &t
+			tpl = t
 		}
 	}
 
@@ -130,17 +131,17 @@ func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
 	crcErrId := crc32.ChecksumIEEE([]byte(errId))
 
 	if t, e := template.New(strCode).Parse(tpl.template); e != nil {
-		strErr := fmt.Sprintf("parser error template failed, namespace: %s, code: %d, error: %s", tpl.namespace, tpl.code, e)
+		strErr := fmt.Sprintf("parser error template failed, namespace: %s, code: %d, error: %s", tpl.namespaceAlias, tpl.code, e)
 		err = &errorCode{id: errId, id_crc: crcErrId, namespace: ERRCODE_NAMESPACE, code: ERRCODE_PARSE_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
 		return
 	} else {
 		var buf bytes.Buffer
 		if e := t.Execute(&buf, params); e != nil {
-			strErr := fmt.Sprintf("execute template failed, namespace: %s code: %d, error: %s", tpl.namespace, tpl.code, e)
+			strErr := fmt.Sprintf("execute template failed, namespace: %s code: %d, error: %s", tpl.namespaceAlias, tpl.code, e)
 			return &errorCode{id: errId, id_crc: crcErrId, namespace: ERRCODE_NAMESPACE, code: ERRCODE_EXEC_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
 		} else {
 			bufstr := strings.Replace(buf.String(), no_VALUE, "[NO_VALUE]", -1)
-			return &errorCode{id: errId, id_crc: crcErrId, namespace: p.namespace, code: tpl.code, message: bufstr, stackTrace: stack.String(), context: params}
+			return &errorCode{id: errId, id_crc: crcErrId, namespace: tpl.namespaceAlias, code: tpl.code, message: bufstr, stackTrace: stack.String(), context: params}
 		}
 	}
 }
@@ -164,6 +165,18 @@ type errorCode struct {
 	context    map[string]interface{}
 }
 
+func NewErrorCode(id string, code uint64, namespace string, message string, stackTrace string, context map[string]interface{}) ErrCode {
+	return &errorCode{
+		id:         id,
+		id_crc:     crc32.ChecksumIEEE([]byte(id)),
+		code:       code,
+		namespace:  namespace,
+		message:    message,
+		stackTrace: stackTrace,
+		context:    context,
+	}
+}
+
 func (p *errorCode) Id() string {
 	return p.id
 }
@@ -177,7 +190,7 @@ func (p *errorCode) Namespace() string {
 }
 
 func (p *errorCode) Error() string {
-	return fmt.Sprintf("[%s-%d-%0xd]: %s", p.namespace, p.code, p.id_crc, p.message)
+	return p.message
 }
 
 func (p *errorCode) FullError() error {
@@ -231,20 +244,35 @@ func LoadMessageTemplate(fileName string) error {
 		key := strings.TrimSpace(datas[0])
 		tmpl := strings.TrimSpace(datas[1])
 		namespace := ""
+		namespaceAlias := ""
 		strCode := ""
 
-		nameAndCode := strings.Split(key, ":")
+		nameAndCode := strings.Split(key, "|")
 		if len(nameAndCode) == 1 {
-			strCode = nameAndCode[0]
+			strCode = strings.TrimSpace(nameAndCode[0])
 		} else if len(nameAndCode) == 2 {
 			namespace = strings.TrimSpace(nameAndCode[0])
-			strCode = nameAndCode[1]
+			strCode = strings.TrimSpace(nameAndCode[1])
 		} else {
-			return Errorf("the first column format is NAMESPACE:CODE or CODE, current is: %s, line: %d", key, i+1)
+			return Errorf("the first column format is NAMESPACE|CODE or CODE, current is: %s, line: %d", key, i+1)
+		}
+
+		nameAliasAndTmpl := strings.Split(tmpl, "|")
+		if len(nameAliasAndTmpl) == 1 {
+			tmpl = strings.TrimSpace(nameAliasAndTmpl[0])
+		} else if len(nameAliasAndTmpl) == 2 {
+			namespaceAlias = strings.TrimSpace(nameAliasAndTmpl[0])
+			tmpl = strings.TrimSpace(nameAliasAndTmpl[1])
+		} else {
+			return Errorf("the second column format is NAMESPACE_ALAIS|TEMPLATE or CODE, current is: %s, line: %d", tmpl, i+1)
 		}
 
 		if namespace == "" {
 			namespace = DEFAULT_ERR_NAMESPACE
+		}
+
+		if namespaceAlias == "" {
+			namespaceAlias = namespace
 		}
 
 		if code, e := strconv.ParseUint(strCode, 10, 32); e != nil {
@@ -254,7 +282,7 @@ func LoadMessageTemplate(fileName string) error {
 			if _, exist := errorTemplate[key]; exist {
 				return Errorf("error code of %s already exist, line %d", key, i+1)
 			}
-			errorTemplate[key] = errCodeTemplate{code: code, namespace: namespace, template: tmpl}
+			errorTemplate[key] = &errCodeTemplate{code: code, namespace: namespace, namespaceAlias: namespaceAlias, template: tmpl}
 		} else {
 			return Errorf("error code should greater than 0, line %d", i+1)
 		}
