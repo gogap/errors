@@ -24,7 +24,7 @@ const (
 )
 
 const (
-	ERRCODE_NAMESPACE     = "ERRORS"
+	ERRCODE_NAMESPACE     = "ERRCODE"
 	DEFAULT_ERR_NAMESPACE = "ERR"
 )
 
@@ -33,12 +33,12 @@ var (
 )
 
 var (
-	errorTemplate  map[string]*errCodeTemplate
+	errorTemplate  map[string]*ErrCodeTemplate
 	errCodeDefined map[string]bool
 )
 
 func init() {
-	errorTemplate = make(map[string]*errCodeTemplate)
+	errorTemplate = make(map[string]*ErrCodeTemplate)
 	errCodeDefined = make(map[string]bool)
 }
 
@@ -60,11 +60,11 @@ func Errorf(format string, a ...interface{}) error {
 	return fmt.Errorf(format, a...)
 }
 
-func T(code uint64, template string) errCodeTemplate {
+func T(code uint64, template string) ErrCodeTemplate {
 	return TN(DEFAULT_ERR_NAMESPACE, code, template)
 }
 
-func TN(namespace string, code uint64, template string) errCodeTemplate {
+func TN(namespace string, code uint64, template string) ErrCodeTemplate {
 	key := fmt.Sprintf("%s:%d", namespace, code)
 	if _, exist := errCodeDefined[key]; exist {
 		strErr := fmt.Sprintf("error code %s already exist", key)
@@ -72,7 +72,7 @@ func TN(namespace string, code uint64, template string) errCodeTemplate {
 	} else {
 		errCodeDefined[key] = true
 	}
-	return errCodeTemplate{code: code, namespace: namespace, namespaceAlias: namespace, template: template}
+	return ErrCodeTemplate{code: code, namespace: namespace, namespaceAlias: namespace, template: template}
 }
 
 type ErrorContext map[string]interface{}
@@ -94,14 +94,14 @@ type ErrCode interface {
 	FullError() error
 }
 
-type errCodeTemplate struct {
+type ErrCodeTemplate struct {
 	namespace      string
 	namespaceAlias string
 	code           uint64
 	template       string
 }
 
-func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
+func (p *ErrCodeTemplate) New(v ...Params) (err ErrCode) {
 	params := Params{}
 	if v != nil {
 		for _, param := range v {
@@ -111,7 +111,7 @@ func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
 		}
 	}
 
-	var tpl *errCodeTemplate = p
+	var tpl *ErrCodeTemplate = p
 	if UsingLoadedTemplate {
 		key := fmt.Sprintf("%s:%d", p.namespace, p.code)
 		if t, exist := errorTemplate[key]; exist {
@@ -146,7 +146,7 @@ func (p *errCodeTemplate) New(v ...Params) (err ErrCode) {
 	}
 }
 
-func (p *errCodeTemplate) IsEqual(err error) bool {
+func (p *ErrCodeTemplate) IsEqual(err error) bool {
 	if e, ok := err.(ErrCode); ok {
 		if e.Code() == p.code && e.Namespace() == p.namespace {
 			return true
@@ -282,7 +282,7 @@ func LoadMessageTemplate(fileName string) error {
 			if _, exist := errorTemplate[key]; exist {
 				return Errorf("error code of %s already exist, line %d", key, i+1)
 			}
-			errorTemplate[key] = &errCodeTemplate{code: code, namespace: namespace, namespaceAlias: namespaceAlias, template: tmpl}
+			errorTemplate[key] = &ErrCodeTemplate{code: code, namespace: namespace, namespaceAlias: namespaceAlias, template: tmpl}
 		} else {
 			return Errorf("error code should greater than 0, line %d", i+1)
 		}
