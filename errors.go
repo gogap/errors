@@ -128,6 +128,9 @@ func (p *ErrCodeTemplate) New(v ...Params) (err ErrCode) {
 
 	crcErrId := crc32.ChecksumIEEE([]byte(errId))
 	strCRCErrId := fmt.Sprintf("%0X", crcErrId)
+	if len(strCRCErrId) > 7 {
+		strCRCErrId = strCRCErrId[0:7]
+	}
 
 	if t, e := template.New(strCode).Parse(tpl.template); e != nil {
 		strErr := fmt.Sprintf("parser error template failed, namespace: %s, code: %d, error: %s", tpl.namespaceAlias, tpl.code, e)
