@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/xid"
 	"hash/crc32"
 	"io/ioutil"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"text/template"
 
 	"github.com/gogap/stack"
-	uuid "github.com/nu7hatch/gouuid"
 )
 
 const (
@@ -19,13 +19,13 @@ const (
 )
 
 const (
-	ERRCODE_PARSE_TPL_ERROR = 1
-	ERRCODE_EXEC_TPL_ERROR  = 2
+	ErrcodeParseTmplError = 1
+	ErrcodeExecTmpleError = 2
 )
 
 const (
-	ERRCODE_NAMESPACE     = "ERRCODE"
-	DEFAULT_ERR_NAMESPACE = "ERR"
+	ErrcodeNamespace      = "ERRCODE"
+	DefaultErrorNamespace = "ERR"
 )
 
 var (
@@ -61,7 +61,7 @@ func Errorf(format string, a ...interface{}) error {
 }
 
 func T(code uint64, template string) ErrCodeTemplate {
-	return TN(DEFAULT_ERR_NAMESPACE, code, template)
+	return TN(DefaultErrorNamespace, code, template)
 }
 
 func TN(namespace string, code uint64, template string) ErrCodeTemplate {
@@ -92,6 +92,7 @@ type ErrCode interface {
 	StackTrace() string
 	Context() ErrorContext
 	FullError() error
+	Append(err ...error) ErrCode
 }
 
 type ErrCodeTemplate struct {
@@ -119,29 +120,27 @@ func (p *ErrCodeTemplate) New(v ...Params) (err ErrCode) {
 		}
 	}
 
-	strCode := fmt.Sprintf("ERRCODE:%d", tpl.code)
+	strCode := fmt.Sprintf("ErrCode:%d", tpl.code)
 
 	stack := stack.CallersDeepth(1, 5)
 
-	errId := "<NO-UUID>"
-	if errUUID, e := uuid.NewV4(); e == nil {
-		errId = errUUID.String()
-	}
+	errId := xid.New().String()
 
 	crcErrId := crc32.ChecksumIEEE([]byte(errId))
+	strCRCErrId := fmt.Sprintf("%0X", crcErrId)
 
 	if t, e := template.New(strCode).Parse(tpl.template); e != nil {
 		strErr := fmt.Sprintf("parser error template failed, namespace: %s, code: %d, error: %s", tpl.namespaceAlias, tpl.code, e)
-		err = &errorCode{id: errId, id_crc: crcErrId, namespace: ERRCODE_NAMESPACE, code: ERRCODE_PARSE_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
+		err = &errorCode{id: strCRCErrId, namespace: ErrcodeNamespace, code: ErrcodeParseTmplError, message: strErr, stackTrace: stack.String(), context: params}
 		return
 	} else {
 		var buf bytes.Buffer
 		if e := t.Execute(&buf, params); e != nil {
 			strErr := fmt.Sprintf("execute template failed, namespace: %s code: %d, error: %s", tpl.namespaceAlias, tpl.code, e)
-			return &errorCode{id: errId, id_crc: crcErrId, namespace: ERRCODE_NAMESPACE, code: ERRCODE_EXEC_TPL_ERROR, message: strErr, stackTrace: stack.String(), context: params}
+			return &errorCode{id: strCRCErrId, namespace: ErrcodeNamespace, code: ErrcodeExecTmpleError, message: strErr, stackTrace: stack.String(), context: params}
 		} else {
 			bufstr := strings.Replace(buf.String(), no_VALUE, "[NO_VALUE]", -1)
-			return &errorCode{id: errId, id_crc: crcErrId, namespace: tpl.namespaceAlias, code: tpl.code, message: bufstr, stackTrace: stack.String(), context: params}
+			return &errorCode{id: strCRCErrId, namespace: tpl.namespaceAlias, code: tpl.code, message: bufstr, stackTrace: stack.String(), context: params}
 		}
 	}
 }
@@ -157,18 +156,17 @@ func (p *ErrCodeTemplate) IsEqual(err error) bool {
 
 type errorCode struct {
 	id         string
-	id_crc     uint32
 	code       uint64
 	namespace  string
 	message    string
 	stackTrace string
 	context    map[string]interface{}
+	errors     []string
 }
 
 func NewErrorCode(id string, code uint64, namespace string, message string, stackTrace string, context map[string]interface{}) ErrCode {
 	return &errorCode{
 		id:         id,
-		id_crc:     crc32.ChecksumIEEE([]byte(id)),
 		code:       code,
 		namespace:  namespace,
 		message:    message,
@@ -190,19 +188,26 @@ func (p *errorCode) Namespace() string {
 }
 
 func (p *errorCode) Error() string {
-	return p.message
+	msg := p.message
+	if p.errors != nil && len(p.errors) > 0 {
+		msg = msg + ", error: "
+		msg = msg + strings.Join(p.errors, "; ")
+		msg = msg + "."
+	}
+
+	return msg
 }
 
 func (p *errorCode) FullError() error {
 	errLines := make([]string, 1)
 
-	errLines[0] = fmt.Sprintf("ERR_ID: %s\nCODE: %s-%d-%0xd", p.id, p.namespace, p.code, p.id_crc)
+	errLines[0] = fmt.Sprintf("Id: %s#%d:%s", p.namespace, p.code, p.id)
 
-	errLines = append(errLines, "MESSAGE:")
-	errLines = append(errLines, p.message)
-	errLines = append(errLines, "CONTEXT:")
+	errLines = append(errLines, "Error:")
+	errLines = append(errLines, p.Error())
+	errLines = append(errLines, "Context:")
 	errLines = append(errLines, p.Context().String())
-	errLines = append(errLines, "ORIGINAL_STACK_TRACE:")
+	errLines = append(errLines, "StackTrace:")
 	errLines = append(errLines, p.stackTrace)
 	return New(strings.Join(errLines, "\n"))
 }
@@ -213,6 +218,15 @@ func (p *errorCode) Context() ErrorContext {
 
 func (p *errorCode) StackTrace() string {
 	return p.stackTrace
+}
+
+func (p *errorCode) Append(err ...error) ErrCode {
+	if err != nil {
+		for _, e := range err {
+			p.errors = append(p.errors, e.Error())
+		}
+	}
+	return p
 }
 
 func LoadMessageTemplate(fileName string) error {
@@ -268,7 +282,7 @@ func LoadMessageTemplate(fileName string) error {
 		}
 
 		if namespace == "" {
-			namespace = DEFAULT_ERR_NAMESPACE
+			namespace = DefaultErrorNamespace
 		}
 
 		if namespaceAlias == "" {

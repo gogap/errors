@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	ERR_PARSE_TEST     = errors.T(10001, "test error")
-	ERR_PARSE_TEST2    = errors.T(10002, "test {{.param1}} error")
-	ERR_STACK_TEST     = errors.T(10003, "call stack test")
-	ERR_NAMESPACE_TEST = errors.TN("GOOD", 10001, "haha error")
+	ErrParseTest     = errors.T(10001, "test error")
+	ErrParseTest2    = errors.T(10002, "test {{.param1}} error")
+	ErrStackTest     = errors.T(10003, "call stack test")
+	ErrNamespaceTest = errors.TN("GOOD", 10001, "haha error")
 )
 
 func main() {
@@ -19,18 +19,18 @@ func main() {
 		return
 	}
 
-	err1 := ERR_PARSE_TEST.New()
-	equal1 := ERR_PARSE_TEST.IsEqual(err1)
+	err1 := ErrParseTest.New()
+	equal1 := ErrParseTest.IsEqual(err1)
 	fmt.Println(err1)
-	fmt.Println(err1, "Equal", ERR_PARSE_TEST, "?:", equal1)
+	fmt.Println(err1, "Equal", ErrParseTest, "?:", equal1)
 
 	fmt.Println("==FullError=======================")
 	fmt.Println(err1.FullError())
 
-	err2 := ERR_PARSE_TEST2.New(errors.Params{"param1": "example"})
+	err2 := ErrParseTest2.New(errors.Params{"param1": "example"})
 
-	equal3 := ERR_PARSE_TEST.IsEqual(err2)
-	fmt.Println(ERR_PARSE_TEST, "Equal", err2, "?:", equal3)
+	equal3 := ErrParseTest.IsEqual(err2)
+	fmt.Println(ErrParseTest, "Equal", err2, "?:", equal3)
 
 	fmt.Println("==Context=========================")
 	fmt.Println(err2.Context())
@@ -42,12 +42,16 @@ func main() {
 
 	fmt.Println(errCode.FullError())
 
-	namedError := ERR_NAMESPACE_TEST.New()
+	namedError := ErrNamespaceTest.New()
 	fmt.Println(namedError)
-	equal4 := ERR_PARSE_TEST.IsEqual(namedError)
-	fmt.Println(ERR_PARSE_TEST, "Equal", namedError, "?:", equal4)
+	equal4 := ErrParseTest.IsEqual(namedError)
+	fmt.Println(ErrParseTest, "Equal", namedError, "?:", equal4)
+
+	e := errors.New("append errors")
+	namedError.Append(e)
 
 	fmt.Println(namedError.FullError())
+
 }
 
 func call_1() error {
@@ -57,5 +61,5 @@ func call_2() error {
 	return call_3()
 }
 func call_3() error {
-	return ERR_STACK_TEST.New()
+	return ErrStackTest.New()
 }
