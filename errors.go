@@ -92,7 +92,7 @@ type ErrCode interface {
 	StackTrace() string
 	Context() ErrorContext
 	FullError() error
-	Append(err ...error) ErrCode
+	Append(err ...interface{}) ErrCode
 }
 
 type ErrCodeTemplate struct {
@@ -220,10 +220,10 @@ func (p *errorCode) StackTrace() string {
 	return p.stackTrace
 }
 
-func (p *errorCode) Append(err ...error) ErrCode {
+func (p *errorCode) Append(err ...interface{}) ErrCode {
 	if err != nil {
 		for _, e := range err {
-			p.errors = append(p.errors, e.Error())
+			p.errors = append(p.errors, fmt.Sprintf("%v", e))
 		}
 	}
 	return p

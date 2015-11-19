@@ -48,7 +48,9 @@ func main() {
 	fmt.Println(ErrParseTest, "Equal", namedError, "?:", equal4)
 
 	e := errors.New("append errors")
+	e2 := errors.New("append errors2")
 	namedError.Append(e)
+	namedError.Append(e2)
 
 	fmt.Println(namedError.FullError())
 
