@@ -193,7 +193,12 @@ func (p *errorCode) Namespace() string {
 func (p *errorCode) Error() string {
 	msg := p.message
 	if p.errors != nil && len(p.errors) > 0 {
-		msg = msg + ", error: "
+		if strings.TrimSpace(p.message) != "" {
+			msg = msg + ", error: "
+		} else {
+			msg = msg + "error: "
+		}
+
 		msg = msg + strings.Join(p.errors, "; ")
 		msg = msg + "."
 	}
