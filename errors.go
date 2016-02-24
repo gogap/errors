@@ -3,6 +3,7 @@ package errors
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"github.com/rs/xid"
 	"hash/crc32"
@@ -315,4 +316,15 @@ func LoadMessageTemplate(fileName string) error {
 func IsErrCode(err error) bool {
 	_, ok := err.(ErrCode)
 	return ok
+}
+
+func (p errorCode) MarshalJSON() ([]byte, error) {
+	str := "\"" + fmt.Sprintf("(%s#%d:%s) %s", p.namespace, p.code, p.id, p.message) + "\""
+	return []byte(str), nil
+}
+
+func (p errorCode) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	str := fmt.Sprintf("(%s#%d:%s) %s", p.namespace, p.code, p.id, p.message)
+	e.EncodeElement(str, start)
+	return nil
 }
