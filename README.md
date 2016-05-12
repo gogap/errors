@@ -4,12 +4,9 @@ For replacement offical package of `errors`
 
 for more detials, see the example
 
-#### `test.txt`
-```text
-10002 = 测试错误，值为:{{.param1}}
-```
 
 #### `main.go`
+```go
 package main
 
 import (
