@@ -7,53 +7,32 @@ import (
 )
 
 var (
-	ErrParseTest     = errors.T(10001, "test error")
-	ErrParseTest2    = errors.T(10002, "test {{.param1}} error")
-	ErrStackTest     = errors.T(10003, "call stack test")
-	ErrNamespaceTest = errors.TN("GOOD", 10001, "haha error")
+	ErrParseTest  = errors.TN("GOGAP", 10001, "hello {{.param1}}")
+	ErrParseTest2 = errors.TN("GOGAP", 10002, "test error")
+	ErrStackTest  = errors.TN("GOGAP", 10003, "call stack test")
 )
 
 func main() {
-	if e := errors.LoadMessageTemplate("./test.txt"); e != nil {
-		fmt.Println(e)
-		return
-	}
 
-	err1 := ErrParseTest.New()
-	equal1 := ErrParseTest.IsEqual(err1)
-	fmt.Println(err1)
-	fmt.Println(err1, "Equal", ErrParseTest, "?:", equal1)
+	e1 := ErrParseTest.New(errors.Params{"param1": "world"}).WithContext("key", "value")
 
-	fmt.Println("==FullError=======================")
-	fmt.Println(err1.FullError())
+	e1.Append("I am append errors")
 
-	err2 := ErrParseTest2.New(errors.Params{"param1": "example"})
+	fmt.Println("always equal while errors append:", ErrParseTest.IsEqual(e1))
 
-	equal3 := ErrParseTest.IsEqual(err2)
-	fmt.Println(ErrParseTest, "Equal", err2, "?:", equal3)
+	fmt.Println("ErrParseTest = ErrParseTest2 :", ErrParseTest2.IsEqual(e1))
 
-	fmt.Println("==Context=========================")
-	fmt.Println(err2.Context())
+	data, _ := e1.(errors.ErrCode).Marshal()
 
-	fmt.Println("==DeepStackTrace==================")
-	errStack := call_1()
+	fmt.Println(string(data))
 
-	errCode := errStack.(errors.ErrCode)
+	fmt.Println(e1.Error())
 
-	fmt.Println(errCode.FullError())
+	stack3Error := call_3()
 
-	namedError := ErrNamespaceTest.New()
-	fmt.Println(namedError)
-	equal4 := ErrParseTest.IsEqual(namedError)
-	fmt.Println(ErrParseTest, "Equal", namedError, "?:", equal4)
+	fmt.Println(stack3Error.(errors.ErrCode).StackTrace())
 
-	e := errors.New("append errors")
-	e2 := errors.New("append errors2")
-	namedError.Append(e)
-	namedError.Append(e2)
-
-	fmt.Println(namedError.FullError())
-
+	fmt.Println(e1.(errors.ErrCode).FullError())
 }
 
 func call_1() error {
