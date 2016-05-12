@@ -132,7 +132,14 @@ func (p *errorCode) StackTrace() string {
 func (p *errorCode) Append(err ...interface{}) ErrCode {
 	if err != nil {
 		for _, e := range err {
-			p.errors = append(p.errors, fmt.Sprintf("%v", e))
+			switch ev := e.(type) {
+			case error:
+				{
+					p.errors = append(p.errors, ev.Error())
+				}
+			default:
+				p.errors = append(p.errors, fmt.Sprintf("%v", e))
+			}
 		}
 	}
 	return p
