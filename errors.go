@@ -133,14 +133,14 @@ func (p *errorCode) Append(err ...interface{}) ErrCode {
 	if err != nil {
 		for _, e := range err {
 			switch ev := e.(type) {
-			case error:
-				{
-					p.errors = append(p.errors, ev.Error())
-				}
 			case ErrCode:
 				{
 					str := fmt.Sprintf("(%s#%d:%s) %s", ev.Namespace(), ev.Code(), ev.Id(), ev.Error())
 					p.errors = append(p.errors, str)
+				}
+			case error:
+				{
+					p.errors = append(p.errors, ev.Error())
 				}
 			default:
 				p.errors = append(p.errors, fmt.Sprintf("%v", e))

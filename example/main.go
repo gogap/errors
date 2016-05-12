@@ -16,7 +16,7 @@ func main() {
 
 	e1 := ErrParseTest.New(errors.Params{"param1": "world"}).WithContext("key", "value")
 
-	e1.Append("I am append errors")
+	e1.Append("I am append errors").Append(ErrParseTest2.New())
 
 	fmt.Println("always equal while errors append:", ErrParseTest.IsEqual(e1))
 
