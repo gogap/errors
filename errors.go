@@ -137,6 +137,11 @@ func (p *errorCode) Append(err ...interface{}) ErrCode {
 				{
 					p.errors = append(p.errors, ev.Error())
 				}
+			case ErrCode:
+				{
+					str := fmt.Sprintf("(%s#%d:%s) %s", ev.Namespace(), ev.Code(), ev.Id(), ev.Error())
+					p.errors = append(p.errors, str)
+				}
 			default:
 				p.errors = append(p.errors, fmt.Sprintf("%v", e))
 			}
