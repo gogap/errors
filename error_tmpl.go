@@ -45,7 +45,7 @@ func (p *ErrCodeTemplate) New(v ...Params) (err ErrCode) {
 
 	stack := stack.CallersDeepth(1, 5)
 
-	errId := fmt.Sprintf("%s.%d.%s.%d", p.namespace, p.code, time.Now().UnixNano())
+	errId := fmt.Sprintf("%s.%d.%s.%d", p.namespace, p.code, p.template, time.Now().UnixNano())
 
 	crcErrId := crc32.ChecksumIEEE([]byte(errId))
 

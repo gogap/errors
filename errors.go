@@ -89,8 +89,13 @@ func (p *errorCode) Namespace() string {
 
 func (p *errorCode) Error() string {
 	msg := p.err.Message
+
 	if len(p.errors) > 0 {
-		msg += "; " + strings.Join(p.errors, "; ") + "."
+		if msg != "" {
+			msg += "; "
+		}
+
+		msg += strings.Join(p.errors, "; ") + "."
 	}
 
 	return msg
