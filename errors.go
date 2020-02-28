@@ -156,7 +156,20 @@ func (p *errorCode) Append(err ...interface{}) ErrCode {
 }
 
 func (p *errorCode) WithContext(key string, value interface{}) ErrCode {
-	p.context[key] = value
+
+	if value != nil {
+		switch val := value.(type) {
+		case error:
+			{
+				p.context[key] = val.Error()
+			}
+		default:
+			p.context[key] = value
+		}
+	} else {
+		p.context[key] = value
+	}
+
 	return p
 }
 
