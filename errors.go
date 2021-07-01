@@ -88,7 +88,7 @@ func (p *errorCode) Namespace() string {
 }
 
 func (p *errorCode) Error() string {
-	msg := p.err.Message
+	msg := fmt.Sprintf("%s, Id: %s#%d:%s", p.err.Message, p.Namespace(), p.Code(), p.Id())
 
 	if len(p.errors) > 0 {
 		if msg != "" {
