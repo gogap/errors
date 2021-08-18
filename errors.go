@@ -34,6 +34,7 @@ type ErrCode interface {
 	Context() ErrorContext
 	FullError() error
 	Append(err ...interface{}) ErrCode
+	WithMessage(extraMsg string) ErrCode
 	WithContext(k string, v interface{}) ErrCode
 	Marshal() ([]byte, error)
 }
@@ -152,6 +153,11 @@ func (p *errorCode) Append(err ...interface{}) ErrCode {
 			}
 		}
 	}
+	return p
+}
+
+func (p *errorCode) WithMessage(extraMsg string) ErrCode {
+	p.err.Message = fmt.Sprintf("%s: %s", p.err.Message, extraMsg)
 	return p
 }
 
